@@ -94,7 +94,6 @@ func getLinks(backend backend.Backend, w http.ResponseWriter, r *http.Request) {
 // web requests.
 func ListenAndServe(backend backend.Backend) error {
 	addr := viper.GetString("addr")
-	admin := viper.GetBool("admin")
 	version := viper.GetString("version")
 	host := viper.GetString("host")
 
@@ -132,11 +131,6 @@ func ListenAndServe(backend backend.Backend) error {
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintln(w, "👍")
 	})
-
-	// TODO(knorton): Remove the admin handler.
-	if admin {
-		mux.Handle("/admin/", &adminHandler{backend})
-	}
 
 	return http.ListenAndServe(addr, mux)
 }
