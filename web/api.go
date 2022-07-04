@@ -148,6 +148,7 @@ func apiURLGet(backend backend.Backend, host string, w http.ResponseWriter, r *h
 	// If we got "foo/bar", we should fall back to looking up "foo" in case it's parameterized.
 	if errors.Is(err, internal.ErrRouteNotFound) {
 		rt, err = backend.Get(ctx, fallback)
+		p = fallback
 	}
 
 	if errors.Is(err, internal.ErrRouteNotFound) {
