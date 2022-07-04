@@ -3,7 +3,7 @@ package leveldb
 import (
 	"bytes"
 
-	"github.com/kellegous/go/internal"
+	"github.com/clintharrison/golinks/internal"
 	"github.com/syndtr/goleveldb/leveldb/iterator"
 )
 
