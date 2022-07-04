@@ -17,13 +17,15 @@ var bannedNames = map[string]bool{
 
 // Parse the shortcut name from the given URL path, given the base URL that is
 // handling the request.
-func parseName(base, path string) string {
+// For a request like /git/reponame, this will return "git/reponame" and "git":
+// the full path takes precedence, otherwise it may be a parameterized link.
+func parseName(base, path string) (full string, fallback string, rest string) {
 	t := path[len(base):]
 	ix := strings.Index(t, "/")
 	if ix == -1 {
-		return t
+		return t, "", ""
 	}
-	return t[:ix]
+	return t, t[:ix], t[ix:]
 }
 
 // Clean a shortcut name. Currently this just means stripping any leading

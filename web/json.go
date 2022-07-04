@@ -10,8 +10,9 @@ import (
 
 // Used as an API response, this is a route with its associated shortcut name.
 type routeWithName struct {
-	Name       string `json:"name"`
-	SourceHost string `json:"source_host"`
+	Name        string `json:"name"`
+	SourceHost  string `json:"source_host"`
+	Destination string `json:"destination"`
 	*internal.Route
 }
 
@@ -67,10 +68,14 @@ func writeJSONBackendError(w http.ResponseWriter, err error) {
 }
 
 // Encode the given named route as a msg and send it to the client.
-func writeJSONRoute(w http.ResponseWriter, name string, rt *internal.Route, host string) {
+func writeJSONRoute(w http.ResponseWriter, name string, rt *internal.Route, host string, dest string) {
 	r := routeWithName{
 		Name:  name,
 		Route: rt,
+	}
+
+	if dest != "" {
+		r.Destination = dest
 	}
 
 	if host != "" {

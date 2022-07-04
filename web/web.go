@@ -8,6 +8,7 @@ import (
 	"html/template"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/spf13/viper"
@@ -46,7 +47,8 @@ func templateFromAssetFn(fn func() (*asset, error)) (*template.Template, error) 
 // The default handler responds to most requests. It is responsible for the
 // shortcut redirects and for sending unmapped shortcuts to the edit page.
 func getDefault(backend backend.Backend, w http.ResponseWriter, r *http.Request) {
-	p := parseName("/", r.URL.Path)
+	// remove the leading / from the path
+	p, fallback, rest := parseName("/", r.URL.Path)
 	if p == "" {
 		http.Redirect(w, r, "/edit/", http.StatusTemporaryRedirect)
 		return
@@ -56,6 +58,11 @@ func getDefault(backend backend.Backend, w http.ResponseWriter, r *http.Request)
 	defer cancel()
 
 	rt, err := backend.Get(ctx, p)
+	// If we got "foo/bar", we should fall back to looking up "foo" in case it's parameterized.
+	if errors.Is(err, internal.ErrRouteNotFound) {
+		rt, err = backend.Get(ctx, fallback)
+	}
+
 	if errors.Is(err, internal.ErrRouteNotFound) {
 		http.Redirect(w, r,
 			fmt.Sprintf("/edit/%s", cleanName(p)),
@@ -65,8 +72,17 @@ func getDefault(backend backend.Backend, w http.ResponseWriter, r *http.Request)
 		log.Panic(err)
 	}
 
+	var dest string
+	if strings.Contains(rt.URL, "%s") {
+		dest = strings.ReplaceAll(rt.URL, "%s", strings.TrimLeft(rest, "/"))
+	} else if rest != "" {
+		dest = rt.URL + rest
+	} else {
+		dest = rt.URL
+	}
+
 	http.Redirect(w, r,
-		rt.URL,
+		dest,
 		http.StatusTemporaryRedirect)
 
 }
@@ -109,7 +125,7 @@ func ListenAndServe(backend backend.Backend) error {
 		getDefault(backend, w, r)
 	})
 	mux.HandleFunc("/edit/", func(w http.ResponseWriter, r *http.Request) {
-		p := parseName("/edit/", r.URL.Path)
+		p, _, _ := parseName("/edit/", r.URL.Path)
 
 		// if this is a banned name, just redirect to the local URI. That'll show em.
 		if isBannedName(p) {

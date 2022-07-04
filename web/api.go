@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -56,16 +57,20 @@ func nextEncodedID(ctx context.Context, backend backend.Backend) (string, error)
 
 // Check that the given URL is suitable as a shortcut link.
 func validateURL(r *http.Request, s string) error {
+	// this is just a workaround
+	if (strings.Contains(s, "%s")) {
+		s = strings.ReplaceAll(s, "%s", "%25s")
+	}
 	u, err := url.Parse(s)
 	if err != nil {
-		return errInvalidURL
+		return fmt.Errorf("invalid URL: %w", err)
 	}
 
 	switch u.Scheme {
 	case "http", "https", "mailto", "ftp":
 		break
 	default:
-		return errInvalidURL
+		return fmt.Errorf("invalid URL scheme: %s", u.Scheme)
 	}
 
 	if r.Host == u.Host {
@@ -76,7 +81,7 @@ func validateURL(r *http.Request, s string) error {
 }
 
 func apiURLPost(backend backend.Backend, host string, w http.ResponseWriter, r *http.Request) {
-	p := parseName("/api/url/", r.URL.Path)
+	p, _, _ := parseName("/api/url/", r.URL.Path)
 
 	var req struct {
 		URL string `json:"url"`
@@ -125,11 +130,11 @@ func apiURLPost(backend backend.Backend, host string, w http.ResponseWriter, r *
 		return
 	}
 
-	writeJSONRoute(w, p, &rt, host)
+	writeJSONRoute(w, p, &rt, host, "")
 }
 
 func apiURLGet(backend backend.Backend, host string, w http.ResponseWriter, r *http.Request) {
-	p := parseName("/api/url/", r.URL.Path)
+	p, fallback, rest := parseName("/api/url/", r.URL.Path)
 
 	if p == "" {
 		writeJSONError(w, "no name given", http.StatusBadRequest)
@@ -140,6 +145,11 @@ func apiURLGet(backend backend.Backend, host string, w http.ResponseWriter, r *h
 	defer cancel()
 
 	rt, err := backend.Get(ctx, p)
+	// If we got "foo/bar", we should fall back to looking up "foo" in case it's parameterized.
+	if errors.Is(err, internal.ErrRouteNotFound) {
+		rt, err = backend.Get(ctx, fallback)
+	}
+
 	if errors.Is(err, internal.ErrRouteNotFound) {
 		writeJSONError(w, "Not Found", http.StatusNotFound)
 		return
@@ -148,11 +158,20 @@ func apiURLGet(backend backend.Backend, host string, w http.ResponseWriter, r *h
 		return
 	}
 
-	writeJSONRoute(w, p, rt, host)
+	var dest string
+	if strings.Contains(rt.URL, "%s") {
+		dest = strings.ReplaceAll(rt.URL, "%s", strings.TrimLeft(rest, "/"))
+	} else if rest != "" {
+		dest = rt.URL + rest
+	} else {
+		dest = rt.URL
+	}
+
+	writeJSONRoute(w, p, rt, host, dest)
 }
 
 func apiURLDelete(backend backend.Backend, w http.ResponseWriter, r *http.Request) {
-	p := parseName("/api/url/", r.URL.Path)
+	p, _, _ := parseName("/api/url/", r.URL.Path)
 
 	if p == "" {
 		writeJSONError(w, "name required", http.StatusBadRequest)
